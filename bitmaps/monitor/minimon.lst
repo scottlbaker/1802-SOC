@@ -1,0 +1,1016 @@
+1802 -> Native
+2 Classes read.
+201 Patterns read.
+    1 0000:             
+    2 0000:             ;=======================================================
+    3 0000:             ;=======================================================
+    4 0000:             ;  1802 mini monitor
+    5 0000:             ;=======================================================
+    6 0000:             ;=======================================================
+    7 0000:             
+            #DEFINE NOHELLOWORLD
+            #DEFINE NODEBUG
+            #DEFINE SHOWPROMPT
+   11 0000:             
+   12 0000:             ; 1802 Register file
+   13 0000:             ;
+   14 0000:             r0            equ     0       ; register 0
+   15 0000:             r1            equ     1       ; register 1
+   16 0000:             r2            equ     2       ; register 2
+   17 0000:             r3            equ     3       ; register 3
+   18 0000:             r4            equ     4       ; register 4
+   19 0000:             r5            equ     5       ; register 5
+   20 0000:             r6            equ     6       ; register 6
+   21 0000:             r7            equ     7       ; register 7
+   22 0000:             r8            equ     8       ; register 8
+   23 0000:             r9            equ     9       ; register 9
+   24 0000:             r10           equ     10      ; register 10
+   25 0000:             r11           equ     11      ; register 11
+   26 0000:             r12           equ     12      ; register 12
+   27 0000:             r13           equ     13      ; register 13
+   28 0000:             r14           equ     14      ; register 14
+   29 0000:             r15           equ     15      ; register 15
+   30 0000:             
+   31 0000:             pc            equ     0       ; program counter
+   32 0000:             rx            equ     1       ; X register
+   33 0000:             sp            equ     2       ; stack pointer
+   34 0000:             callptr       equ     3       ; ptr to call sub
+   35 0000:             callpc        equ     4       ; call PC
+   36 0000:             txstat        equ     7       ; UART status pointer
+   37 0000:             rxstat        equ     7       ; UART status pointer
+   38 0000:             txdata        equ     8       ; UART data pointer
+   39 0000:             rxdata        equ     8       ; UART data pointer
+   40 0000:             tmstat        equ     9       ; timer status
+   41 0000:             tmcntl        equ     9       ; timer control
+   42 0000:             porta         equ     10      ; output port A
+   43 0000:             
+   44 0000:             t1            equ     11      ; temp register
+   45 0000:             t2            equ     12      ; temp register
+   46 0000:             t3            equ     13      ; temp register
+   47 0000:             t4            equ     14      ; temp register
+   48 0000:             t5            equ     15      ; temp register
+   49 0000:             
+   50 0000:             ; UART register addresses
+   51 0000:             ;
+   52 0000:             uartcntl      equ    0f000h
+   53 0000:             uartbsr0      equ    0f001h
+   54 0000:             uartbsr1      equ    0f002h
+   55 0000:             uartstat      equ    0f003h
+   56 0000:             uartmask      equ    0f004h
+   57 0000:             uartdata      equ    0f005h
+   58 0000:             
+   59 0000:             ; UART baud rate
+   60 0000:             ;
+            #ELSE
+   65 0000:             baud0         equ    0e3h      ; 115200
+   66 0000:             baud1         equ    78h       ; 115200
+            #ENDIF
+   68 0000:             
+   69 0000:             ; UART status/control register bits
+   70 0000:             ;
+   71 0000:             framingerror  equ    40h
+   72 0000:             parityerror   equ    20h
+   73 0000:             overrunerr    equ    10h
+   74 0000:             txfifoempty   equ    08h
+   75 0000:             txnotfull     equ    04h
+   76 0000:             rxfifofull    equ    02h
+   77 0000:             rxnotempty    equ    01h
+   78 0000:             txrx          equ    03h
+   79 0000:             
+   80 0000:             ; TIMER register addresses
+   81 0000:             ;
+   82 0000:             timrcntl      equ    0f008h
+   83 0000:             timrstat      equ    0f008h
+   84 0000:             timricl       equ    0f009h
+   85 0000:             timrich       equ    0f00ah
+   86 0000:             
+            #ELSE
+   93 0000:             time0         equ    88h     ; 5 seconds
+   94 0000:             time1         equ    13h     ; 5 seconds
+   95 0000:             tmstart       equ    01h     ; start timer
+   96 0000:             tmstop        equ    00h     ; stop timer
+            #ENDIF
+   98 0000:             
+   99 0000:             ; PORT register address
+  100 0000:             ;
+  101 0000:             oporta        equ    0f00ch
+  102 0000:             
+  103 0000:             ; stack pointer @ top of RAM
+  104 0000:             ;
+  105 0000:             stack         equ     0fffh
+  106 0000:             
+  107 0000:             
+  108 0000:             ;=======================================================
+  109 0000:             ; Start Point
+  110 0000:             ;=======================================================
+  111 0000:             
+  112 0000:                        ORG     0000h
+  113 0000: c0 01 dd               lbr     init
+  114 0003:             
+  115 0003:             ;=======================================================
+  116 0003:             ;    S U B R O U T I N E S
+  117 0003:             ;=======================================================
+  118 0003:             
+  119 0003:             ;=======================================================
+  120 0003:             ; send error message to console
+  121 0003:             ;=======================================================
+  122 0003: f8 03       xinval:    ldi high invalmsg
+  123 0005: be                     phi      t4
+  124 0006: f8 92                  ldi low  invalmsg
+  125 0008: ae                     plo      t4
+  126 0009: c0 00 4b               lbr      putst
+  127 000c:             
+  128 000c:             ;=======================================================
+  129 000c:             ; send diag message to console
+  130 000c:             ;=======================================================
+  131 000c: f8 03       xishex:    ldi high ishexmsg
+  132 000e: be                     phi      t4
+  133 000f: f8 86                  ldi low  ishexmsg
+  134 0011: ae                     plo      t4
+  135 0012: c0 00 4b               lbr      putst
+  136 0015:             
+  137 0015:             ;=======================================================
+  138 0015:             ; send diag message to console
+  139 0015:             ;=======================================================
+  140 0015: f8 03       xisnum:    ldi high isnummsg
+  141 0017: be                     phi      t4
+  142 0018: f8 78                  ldi low  isnummsg
+  143 001a: ae                     plo      t4
+  144 001b: c0 00 4b               lbr      putst
+  145 001e:             
+  146 001e:             ;=======================================================
+  147 001e:             ; send help message to console
+  148 001e:             ;=======================================================
+  149 001e: f8 02       xhello:    ldi high hellomsg
+  150 0020: be                     phi      t4
+  151 0021: f8 8e                  ldi low  hellomsg
+  152 0023: ae                     plo      t4
+  153 0024: c0 00 4b               lbr      putst
+  154 0027:             
+  155 0027:             ;=======================================================
+  156 0027:             ; send help message to console
+  157 0027:             ;=======================================================
+  158 0027: f8 02       xhelp:     ldi high helpmsg
+  159 0029: be                     phi      t4
+  160 002a: f8 aa                  ldi low  helpmsg
+  161 002c: ae                     plo      t4
+  162 002d: c0 00 4b               lbr      putst
+  163 0030:             
+  164 0030:             ;=======================================================
+  165 0030:             ; send prompt to console
+  166 0030:             ;=======================================================
+  167 0030: f8 03       xprompt:   ldi high prompt
+  168 0032: be                     phi      t4
+  169 0033: f8 71                  ldi low  prompt
+  170 0035: ae                     plo      t4
+  171 0036: c0 00 4b               lbr      putst
+  172 0039:             
+  173 0039:             ;=======================================================
+  174 0039:             ; send CRLF to console
+  175 0039:             ;=======================================================
+  176 0039: f8 03       xcrlf:     ldi high crlf
+  177 003b: be                     phi      t4
+  178 003c: f8 75                  ldi low  crlf
+  179 003e: ae                     plo      t4
+  180 003f: c0 00 4b               lbr      putst
+  181 0042:             
+  182 0042:             ;=======================================================
+  183 0042:             ; clear screen
+  184 0042:             ;=======================================================
+  185 0042: f8 03       xclear:    ldi high clearscr
+  186 0044: be                     phi      t4
+  187 0045: f8 66                  ldi low  clearscr
+  188 0047: ae                     plo      t4
+  189 0048: c0 00 4b               lbr      putst
+  190 004b:             
+  191 004b:             ;=======================================================
+  192 004b:             ; Send a string to the console
+  193 004b:             ;=======================================================
+  194 004b: 0e          putst:     ldn    t4         ; load char from message
+  195 004c: c2 02 80               lbz    return     ; check if last char
+  196 004f: 07          puts1:     ldn    txstat     ; get tx uart status
+  197 0050: fa 04                  ani    txnotfull  ; tx fifo full?
+  198 0052: c2 00 4f               lbz    puts1      ; wait if full
+  199 0055: 4e                     lda    t4         ; load char from message
+  200 0056: 58                     str    txdata     ; send char to console
+  201 0057: c0 00 4b               lbr    putst      ; loop
+  202 005a: c0 02 80               lbr    return     ; return
+  203 005d:             
+  204 005d:             
+  205 005d:             ;=======================================================
+  206 005d:             ; Get a single character from the console
+  207 005d:             ;=======================================================
+  208 005d: 07          getc:      ldn    rxstat       ; get RX UART status
+  209 005e: fa 01                  ani    rxnotempty   ; RX FIFO empty?
+  210 0060: c2 00 5d               lbz    getc         ; wait if empty
+  211 0063: 08                     ldn    rxdata       ; get a character
+  212 0064: ab                     plo    t1           ; save char
+  213 0065: c0 02 80               lbr    return       ; return
+  214 0068:             
+  215 0068:             
+  216 0068:             ;=======================================================
+  217 0068:             ; Get a single character from the console (with echo)
+  218 0068:             ;=======================================================
+  219 0068: 07          getch:     ldn    rxstat       ; get RX UART status
+  220 0069: fa 01                  ani    rxnotempty   ; RX FIFO empty?
+  221 006b: c2 00 68               lbz    getch        ; wait if empty
+  222 006e: 08                     ldn    rxdata       ; get a character
+  223 006f: ab                     plo    t1           ; save char
+  224 0070:             
+  225 0070:             
+  226 0070:             ;=======================================================
+  227 0070:             ; Send a single character to the console
+  228 0070:             ;=======================================================
+  229 0070: 07          putc:      ldn    txstat       ; get TX UART status
+  230 0071: fa 04                  ani    txnotfull    ; TX FIFO full?
+  231 0073: c2 00 70               lbz    putc         ; wait if full
+  232 0076: 8b                     glo    t1           ; restore char
+  233 0077: 58                     str    txdata       ; put a character
+  234 0078: c0 02 80               lbr    return       ; return
+  235 007b:             
+  236 007b:             
+  237 007b:             ;=======================================================
+  238 007b:             ; Convert to upper case
+  239 007b:             ;=======================================================
+  240 007b: 8b          toupper:   glo      t1        ; get char
+  241 007c: ff 61                  smi      'a'       ; check lower case
+  242 007e: cb 02 80               lbnf     return    ; return if below 'a'
+  243 0081: ff 1a                  smi      26        ; check upper range
+  244 0083: c3 02 80               lbdf     return    ; return if above
+  245 0086: 8b                     glo      t1        ; get char
+  246 0087: ff 20                  smi      32        ; convert to upper
+  247 0089: ab                     plo      t1        ; save char
+  248 008a: c0 02 80               lbr      return    ; return
+  249 008d:             
+  250 008d:             
+  251 008d:             ;=======================================================
+  252 008d:             ; Check if char is alphabetic
+  253 008d:             ;    DF=0 if alphabetic
+  254 008d:             ;    DF=1 if if non-alphabetic
+  255 008d:             ;=======================================================
+  256 008d: 8b          isalpha:   glo      t1        ; get char
+  257 008e: ff 41                  smi      'A'       ; check upper case
+  258 0090: cb 02 7d               lbnf     fails     ; jump if below 'A'
+  259 0093: ff 1b                  smi      27        ; check upper range
+  260 0095: cb 02 77               lbnf     passes    ; jump if valid
+  261 0098: 8b                     glo      t1        ; get char
+  262 0099: ff 61                  smi      'a'       ; check lower case
+  263 009b: cb 02 7d               lbnf     fails     ; jump if below 'a'
+  264 009e: ff 1b                  smi      27        ; check upper range
+  265 00a0: c3 02 7d               lbdf     fails     ; fail if above
+  266 00a3: c0 02 77               lbr      passes    ; otherwise pass
+  267 00a6:             
+  268 00a6:             
+  269 00a6:             ;=======================================================
+  270 00a6:             ; Check if char is numeric
+  271 00a6:             ;    DF=0 if numeric
+  272 00a6:             ;    DF=1 if non-numeric
+  273 00a6:             ;=======================================================
+  274 00a6: 8b          isnum:     glo      t1        ; get char
+  275 00a7: ff 30                  smi      '0'       ; check lower range
+  276 00a9: cb 02 7d               lbnf     fails     ; fail if below '0'
+  277 00ac: ff 0a                  smi      10        ; check upper range
+  278 00ae: c3 02 7d               lbdf     fails     ; fail if above
+  279 00b1: c0 02 77               lbr      passes    ; otherwise pass
+  280 00b4:             
+  281 00b4:             
+  282 00b4:             ;=======================================================
+  283 00b4:             ; Check if char is alphanumeric
+  284 00b4:             ;    DF=0 if alphanumeric
+  285 00b4:             ;    DF=1 if non-alphanumeric
+  286 00b4:             ;=======================================================
+  287 00b4: 8b          isalnum:   glo      t1        ; get char
+  288 00b5: ff 30                  smi      '0'       ; check lower range
+  289 00b7: cb 02 7d               lbnf     fails     ; fail if below '0'
+  290 00ba: ff 0a                  smi      10        ; check upper range
+  291 00bc: c3 02 7d               lbdf     fails     ; fails if above 10
+  292 00bf: 8b                     glo      t1        ; get char
+  293 00c0: ff 41                  smi      'A'       ; check upper case
+  294 00c2: cb 02 7d               lbnf     fails     ; fail if below 'A'
+  295 00c5: ff 1b                  smi      27        ; check upper range
+  296 00c7: cb 02 77               lbnf     passes    ; jump if valid
+  297 00ca: 8b                     glo      t1        ; get char
+  298 00cb: ff 61                  smi      'a'       ; check lower case
+  299 00cd: cb 02 7d               lbnf     fails     ; jump if below 'a'
+  300 00d0: ff 1b                  smi      27        ; check upper range
+  301 00d2: c3 02 7d               lbdf     fails     ; fail if above
+  302 00d5: c0 02 77               lbr      passes    ; otherwise pass
+  303 00d8:             
+  304 00d8:             
+  305 00d8:             ;=======================================================
+  306 00d8:             ; Check if char is hexidecimal
+  307 00d8:             ;    DF=0 if hex
+  308 00d8:             ;    DF=1 if non-hex
+  309 00d8:             ;=======================================================
+  310 00d8: 8b          ishex:     glo      t1        ; get char
+  311 00d9: ff 30                  smi      '0'       ; check lower range
+  312 00db: cb 02 7d               lbnf     fails     ; fail if below '0'
+  313 00de: ff 0a                  smi      10        ; check upper range
+  314 00e0: cb 02 77               lbnf     passes    ; pass if numeric
+  315 00e3: 8b                     glo      t1        ; get char
+  316 00e4: ff 41                  smi      'A'       ; check lower range
+  317 00e6: cb 02 7d               lbnf     fails     ; < 'A' is not hex
+  318 00e9: ff 06                  smi      6         ; check upper range
+  319 00eb: cb 02 77               lbnf     passes    ; pass if <= 'F'
+  320 00ee: 8b                     glo      t1        ; get char
+  321 00ef: ff 61                  smi      'a'       ; check lower range
+  322 00f1: cb 02 7d               lbnf     fails     ; < 'a' is not hex
+  323 00f4: ff 06                  smi      6         ; check upper range
+  324 00f6: cb 02 77               lbnf     passes    ; pass if <= 'f'
+  325 00f9: c0 02 7d               lbr      fails     ; otherwise fail
+  326 00fc:             
+  327 00fc:             
+  328 00fc:             ;=======================================================
+  329 00fc:             ; Check if char is A-F
+  330 00fc:             ;    DF=0 if hex
+  331 00fc:             ;    DF=1 if non-hex
+  332 00fc:             ;=======================================================
+  333 00fc: 8b          ishex2:    glo      t1        ; get char
+  334 00fd: ff 41                  smi      'A'       ; check lower range
+  335 00ff: cb 02 7d               lbnf     fails     ; < 'A' is not hex
+  336 0102: ff 06                  smi      6         ; check upper range
+  337 0104: cb 02 77               lbnf     passes    ; pass if <= 'F'
+  338 0107: c0 02 7d               lbr      fails     ; otherwise fail
+  339 010a:             
+  340 010a:             
+  341 010a:             ;=======================================================
+  342 010a:             ; trims leading white space from a string
+  343 010a:             ;   t4 points to first non-whitespace character
+  344 010a:             ;=======================================================
+  345 010a: 0e          ltrim:     ldn      t4        ; get next char
+  346 010b: c2 02 80               lbz      return    ; check for end
+  347 010e: ff 21                  smi      ' '+1     ; check for char <= space
+  348 0110: c3 02 80               lbdf     return    ; found non white-space
+  349 0113: 1e                     inc      t4        ; point to next character
+  350 0114: c0 01 0a               lbr      ltrim     ; keep looking
+  351 0117:             
+  352 0117:             
+  353 0117:             ;=======================================================
+  354 0117:             ; compare two strings pointing to by t3 and t4
+  355 0117:             ;     t4 = t3     0
+  356 0117:             ;     t4 < t3    -1
+  357 0117:             ;     t4 > t3     1
+  358 0117:             ;=======================================================
+  359 0117: 4d          strcmp:    lda      t3        ; get next t3 char
+  360 0118: c2 01 2f               lbz      strcmpe   ; check for end
+  361 011b: 73                     stxd               ; store into mem(X)
+  362 011c: 60                     irx                ; fix x
+  363 011d: 4e                     lda      t4        ; get next t4 char
+  364 011e: f7                     sm                 ; compare the two chars
+  365 011f: c2 01 17               lbz      strcmp    ; if match then continue
+  366 0122: cb 01 2a               lbnf     strcmp1   ; check mismatch
+  367 0125: f8 01                  ldi      1         ; t4 > t3
+  368 0127: c0 02 80               lbr      return    ; return 1
+  369 012a: f8 ff       strcmp1:   ldi      255       ; t4 < t3
+  370 012c: c0 02 80               lbr      return    ; return -1
+  371 012f: 4e          strcmpe:   lda      t4        ; get next t4 char
+  372 0130: c2 01 38               lbz      strcmpm   ; jump if also zero
+  373 0133: f8 01                  ldi      1         ; t4 > t3
+  374 0135: c0 02 80               lbr      return    ; return 1
+  375 0138: f8 00       strcmpm:   ldi      0         ; t4 = t3
+  376 013a: c0 02 80               lbr      return    ; return 0
+  377 013d:             
+  378 013d:             
+  379 013d:             ;=======================================================
+  380 013d:             ; copy a string pointed to by t4 to t3
+  381 013d:             ;=======================================================
+  382 013d: 4e          strcpy:    lda      t4        ; get next char
+  383 013e: 5d                     str      t3        ; store into dest
+  384 013f: c2 02 80               lbz      return    ; return if end
+  385 0142: 1d                     inc      t3        ; increment dest pointer
+  386 0143: c0 01 3d               lbr      strcpy    ; continue
+  387 0146:             
+  388 0146:             
+  389 0146:             ;=======================================================
+  390 0146:             ; copy t2 bytes from t4 to t3
+  391 0146:             ;=======================================================
+  392 0146: 8c          memcpy:    glo      t2        ; get low count byte
+  393 0147: ca 01 4e               lbnz     memcpy1   ; jump if not zero
+  394 014a: 9c                     ghi      t2        ; get high count byte
+  395 014b: c2 02 80               lbz      return    ; return if end
+  396 014e: 4e          memcpy1:   lda      t4        ; get byte from source
+  397 014f: 5d                     str      t3        ; store into dest
+  398 0150: 1d                     inc      t3        ; point to next dest
+  399 0151: 2c                     dec      t2        ; decrement count
+  400 0152: c0 01 46               lbr      memcpy    ; and continue copy
+  401 0155:             
+  402 0155:             
+  403 0155:             ;=======================================================
+  404 0155:             ; Get hex input (address or data) from user
+  405 0155:             ;=======================================================
+  406 0155: f8 20       getinp:    ldi      ' '       ; print a space
+  407 0157: ab                     plo      t1        ; save char
+  408 0158: d3                     sep      callptr
+  409 0159: 00 70                  dw       putc
+  410 015b:             
+  411 015b: f8 03                  ldi high tempbuf
+  412 015d: be                     phi      t4
+  413 015e: f8 a1                  ldi low  tempbuf
+  414 0160: ae                     plo      t4
+  415 0161:             
+  416 0161: d3          getinp1:   sep      callptr   ; get a char
+  417 0162: 00 68                  dw       getch     ; echo
+  418 0164: ab                     plo      t1        ; save char
+  419 0165: d3                     sep      callptr   ; check if digit
+  420 0166: 00 a6                  dw       isnum
+  421 0168: cb 01 77               lbnf     getinp2   ; is digit
+  422 016b: d3                     sep      callptr   ; to upper case
+  423 016c: 00 7b                  dw       toupper
+  424 016e: d3                     sep      callptr   ; check if hex
+  425 016f: 00 fc                  dw       ishex2
+  426 0171: cb 01 7d               lbnf     getinp3   ; is hex
+  427 0174: c0 01 c8               lbr      getinpx   ; is invalid
+  428 0177: 8b          getinp2:   glo      t1        ; conv to binary
+  429 0178: ff 30                  smi      30h
+  430 017a: c0 01 80               lbr      getinp4
+  431 017d: 8b          getinp3:   glo      t1        ; conv to binary
+  432 017e: ff 37                  smi      37h
+  433 0180: 5e          getinp4:   str      t4        ; save to buffer
+  434 0181: 1e                     inc      t4        ; inc pointer
+  435 0182: 8c                     glo      t2        ; loop counter
+  436 0183: ff 01                  smi      1
+  437 0185: ac                     plo      t2
+  438 0186: ca 01 61               lbnz     getinp1   ; repeat
+  439 0189: ee                     sex      t4
+  440 018a: f8 00                  ldi      0
+  441 018c: bb                     phi      t1
+  442 018d: 8d                     glo      t3        ; restore t2
+  443 018e: ac                     plo      t2
+  444 018f: 2e          getinp5:   dec      t4        ; next loop
+  445 0190: 2e                     dec      t4        ; upper nibble
+  446 0191: 0e                     ldn      t4
+  447 0192: fe                     shl                ; x 2
+  448 0193: fe                     shl                ; x 4
+  449 0194: fe                     shl                ; x 8
+  450 0195: fe                     shl                ; x 16
+  451 0196: 1e                     inc      t4
+  452 0197: f4                     add
+  453 0198: 5e                     str      t4        ; save
+  454 0199: 8d                     glo      t3        ; 2 or 4 hex digits
+  455 019a: ff 02                  smi      2
+  456 019c: ad                     plo      t3
+  457 019d: 2e                     dec      t4
+  458 019e: 3a 8f                  bnz      getinp5   ; repeat
+  459 01a0: 8c                     glo      t2        ; 2 or 4 hex digits
+  460 01a1: ff 02                  smi      2
+  461 01a3: 1e                     inc      t4
+  462 01a4: 0e                     ldn      t4
+  463 01a5: ab                     plo      t1
+  464 01a6: c2 01 c5               lbz      getinp8   ; 8-bit value
+  465 01a9: bb                     phi      t1
+  466 01aa: 1e                     inc      t4
+  467 01ab: 1e                     inc      t4
+  468 01ac: 0e                     ldn      t4
+  469 01ad: ab                     plo      t1
+  470 01ae: 8f                     glo      t5        ; retrieve command
+  471 01af: ff 47                  smi      'G'
+  472 01b1: c2 01 b7               lbz      goto1
+  473 01b4: c0 02 32               lbr      main      ; not implemented
+  474 01b7:             
+  475 01b7: f8 01       goto1:     ldi high goto2
+  476 01b9: bc                     phi      t2
+  477 01ba: f8 c3                  ldi low  goto2
+  478 01bc: ac                     plo      t2        ; smc !!
+  479 01bd: 9b                     ghi      t1
+  480 01be: 5c                     str      t2
+  481 01bf: 1c                     inc      t2
+  482 01c0: 8b                     glo      t1
+  483 01c1: 5c                     str      t2
+  484 01c2:             
+  485 01c2: c0                     db       0c0h      ; lbr
+  486 01c3: 00          goto2:     db       0
+  487 01c4: 00                     db       0
+  488 01c5:             
+  489 01c5: c0 02 32    getinp8:   lbr      main      ; not implemented
+  490 01c8: d3          getinpx:   sep      callptr   ; invalid
+  491 01c9: 00 03                  dw       xinval
+  492 01cb: c0 02 80               lbr      return
+  493 01ce:             
+  494 01ce:             
+  495 01ce:             ;=======================================================
+  496 01ce:             ; Wait
+  497 01ce:             ;=======================================================
+  498 01ce: f8 01       wait:      ldi      tmstart   ; start timer
+  499 01d0: 59                     str      tmcntl
+  500 01d1: 09          waitloop:  ldn      tmstat    ; read status
+  501 01d2: fa 04                  ani      04h
+  502 01d4: c2 01 d1               lbz      waitloop  ; loop until done
+  503 01d7: f8 00                  ldi      tmstop
+  504 01d9: 59                     str      tmcntl
+  505 01da: c2 02 80               lbz      return
+  506 01dd:             
+  507 01dd:             
+  508 01dd:             ;=======================================================
+  509 01dd:             ; Initialization
+  510 01dd:             ;=======================================================
+  511 01dd: f8 0f       init:      ldi high stack      ; stack pointer
+  512 01df: b2                     phi      sp
+  513 01e0: f8 ff                  ldi low  stack
+  514 01e2: a2                     plo      sp
+  515 01e3:             
+  516 01e3: e1                     sex      rx         ; set X
+  517 01e4:             
+  518 01e4: f8 02                  ldi high callsub    ; callsub ptr
+  519 01e6: b3                     phi      callptr
+  520 01e7: f8 88                  ldi low  callsub
+  521 01e9: a3                     plo      callptr
+  522 01ea:             
+  523 01ea: f8 f0                  ldi high uartdata   ; UART data
+  524 01ec: b8                     phi      txdata
+  525 01ed: f8 05                  ldi low  uartdata
+  526 01ef: a8                     plo      txdata
+  527 01f0:             
+  528 01f0: f8 f0                  ldi high uartstat   ; UART status
+  529 01f2: b7                     phi      txstat
+  530 01f3: f8 03                  ldi low  uartstat
+  531 01f5: a7                     plo      txstat
+  532 01f6:             
+  533 01f6: f8 f0                  ldi high oporta     ; port A
+  534 01f8: ba                     phi      porta
+  535 01f9: f8 0c                  ldi low  oporta
+  536 01fb: aa                     plo      porta
+  537 01fc:             
+  538 01fc: f8 f0                  ldi high timrstat   ; timer status
+  539 01fe: b9                     phi      tmstat
+  540 01ff: f8 08                  ldi low  timrstat
+  541 0201: a9                     plo      tmstat
+  542 0202:             
+  543 0202: f8 f0                  ldi high timricl    ; timer count low
+  544 0204: bb                     phi      t1
+  545 0205: f8 09                  ldi low  timricl
+  546 0207: ab                     plo      t1
+  547 0208: f8 88                  ldi      time0      ; timer byte0
+  548 020a: 5b                     str      t1
+  549 020b:             
+  550 020b: f8 f0                  ldi high timrich    ; timer count high
+  551 020d: bb                     phi      t1
+  552 020e: f8 0a                  ldi low  timrich
+  553 0210: ab                     plo      t1
+  554 0211: f8 13                  ldi      time1      ; timer byte1
+  555 0213: 5b                     str      t1
+  556 0214:             
+  557 0214: f8 f0                  ldi high uartbsr0   ; UART baud 0
+  558 0216: bb                     phi      t1
+  559 0217: f8 01                  ldi low  uartbsr0
+  560 0219: ab                     plo      t1
+  561 021a: f8 e3                  ldi      baud0      ; set baud rate
+  562 021c: 5b                     str      t1
+  563 021d:             
+  564 021d: f8 f0                  ldi high uartbsr1   ; UART baud 1
+  565 021f: bb                     phi      t1
+  566 0220: f8 02                  ldi low  uartbsr1
+  567 0222: ab                     plo      t1
+  568 0223: f8 78                  ldi      baud1      ; set baud rate
+  569 0225: 5b                     str      t1
+  570 0226:             
+  571 0226: f8 f0                  ldi high uartcntl   ; UART control
+  572 0228: bb                     phi      t1
+  573 0229: f8 00                  ldi low  uartcntl
+  574 022b: ab                     plo      t1
+  575 022c: f8 03                  ldi      txrx       ; enable transmit
+  576 022e: 5b                     str      t1
+  577 022f:             
+  578 022f: d3          hello:     sep      callptr    ; hello world
+  579 0230: 00 1e                  dw       xhello
+  580 0232:             
+            #ENDIF
+  589 0232:             
+  590 0232:             ;=======================================================
+  591 0232:             ; Start Point (main loop)
+  592 0232:             ;=======================================================
+  593 0232:             main:
+  594 0232:             
+            #IFDEF  SHOWPROMPT
+  596 0232: d3                     sep      callptr    ; display prompt
+  597 0233: 00 30                  dw       xprompt
+            #ENDIF
+  599 0235: d3                     sep      callptr    ; get a character
+  600 0236: 00 68                  dw       getch
+  601 0238:             
+  602 0238: d3                     sep      callptr    ; to upper case
+  603 0239: 00 7b                  dw       toupper
+  604 023b: af                     plo      t5         ; save the command
+  605 023c:             
+  606 023c: ff 48                  smi      'H'        ; help command?
+  607 023e: c2 02 5d               lbz      cmd_help
+  608 0241: 8b                     glo      t1
+  609 0242:             
+  610 0242: ff 43                  smi      'C'        ; clear command?
+  611 0244: c2 02 63               lbz      cmd_clear
+  612 0247: 8b                     glo      t1
+  613 0248:             
+  614 0248: ff 52                  smi      'R'        ; restart command
+  615 024a: c2 01 dd               lbz      init
+  616 024d: 8b                     glo      t1
+  617 024e:             
+  618 024e: ff 4f                  smi      'O'        ; output command
+  619 0250: c2 02 69               lbz      cmd_out
+  620 0253: 8b                     glo      t1
+  621 0254:             
+  622 0254: ff 47                  smi      'G'        ; goto command?
+  623 0256: c2 02 70               lbz      cmd_goto
+  624 0259: 8b                     glo      t1
+  625 025a:             
+  626 025a: c0 02 32               lbr      main
+  627 025d:             
+  628 025d: d3          cmd_help:  sep      callptr    ; call xhelp
+  629 025e: 00 27                  dw       xhelp
+  630 0260: c0 02 32               lbr      main
+  631 0263:             
+  632 0263: d3          cmd_clear: sep      callptr    ; call xclear
+  633 0264: 00 42                  dw       xclear
+  634 0266: c0 02 32               lbr      main
+  635 0269:             
+  636 0269: 0a          cmd_out    ldn      porta      ; increment port A
+  637 026a: fc 01                  adi      01h
+  638 026c: 5a                     str      porta
+  639 026d: c0 02 32               lbr      main
+  640 0270:             
+  641 0270: f8 04       cmd_goto:  ldi      4          ; loop counter
+  642 0272: ac                     plo      t2
+  643 0273: ad                     plo      t3
+  644 0274: c0 01 55               lbr      getinp
+  645 0277:             
+  646 0277:             
+  647 0277:             ;=======================================================
+  648 0277:             ; Common pass/fail code
+  649 0277:             ;=======================================================
+  650 0277: f8 00       passes:    ldi      0          ; signal success
+  651 0279: f6                     shr
+  652 027a: c0 02 80               lbr      return
+  653 027d:             
+  654 027d: f8 01       fails:     ldi      1          ; signal failure
+  655 027f: f6                     shr
+  656 0280:             
+  657 0280: f8 02       return:    ldi high callsub    ; restore call ptr
+  658 0282: b3                     phi      callptr
+  659 0283: f8 88                  ldi low  callsub
+  660 0285: a3                     plo      callptr
+  661 0286: 8b                     glo      t1         ; restore D
+  662 0287: d0                     sep      pc         ; return to caller
+  663 0288:             
+  664 0288: 40          callsub:   lda      pc         ; get subroutine addr
+  665 0289: b4                     phi      callpc
+  666 028a: 40                     lda      pc
+  667 028b: a4                     plo      callpc
+  668 028c: 8b                     glo      t1         ; restore D
+  669 028d: d4                     sep      callpc     ; call subroutine
+  670 028e:             
+  671 028e:             
+  672 028e:             ;=======================================================
+  673 028e:             ; Strings
+  674 028e:             ;=======================================================
+  675 028e:             
+            #ELSE
+  679 028e: 0d 0a       hellomsg:  db       0dh,0ah
+  680 0290: 57 65 6c 63 
+            6f 6d 65 20 
+            74 6f 20 31 
+            38 30 32 20 
+            4d 6f 6e 69 
+            74 6f 72               db       'Welcome to 1802 Monitor'
+  681 02a7: 0d 0a 00               db       0dh,0ah,0
+            #ENDIF
+  683 02aa:             
+  684 02aa: 0d 0a 0d 0a helpmsg:   db       0dh,0ah,0dh,0ah
+  685 02ae: 43 6f 6d 6d 
+            61 6e 64 20 
+            53 75 6d 6d 
+            61 72 79 3a 
+            0d 0a                  db       'Command Summary:',0dh,0ah
+  686 02c0: 68 20 20 20 
+            20 20 20 20 
+            20 20 20 20 
+            2e 2e 20 70 
+            72 69 6e 74 
+            20 74 68 69 
+            73 20 68 65 
+            6c 70 20 6d 
+            65 73 73 61 
+            67 65 0d 0a            db       'h           .. print this help message',0dh,0ah
+  687 02e8: 63 20 20 20 
+            20 20 20 20 
+            20 20 20 20 
+            2e 2e 20 63 
+            6c 65 61 72 
+            20 73 63 72 
+            65 65 6e 0d 
+            0a                     db       'c           .. clear screen',0dh,0ah
+  688 0305: 72 20 20 20 
+            20 20 20 20 
+            20 20 20 20 
+            2e 2e 20 73 
+            6f 66 74 20 
+            72 65 73 65 
+            74 0d 0a               db       'r           .. soft reset',0dh,0ah
+  689 0320: 6f 20 20 20 
+            20 20 20 20 
+            20 20 20 20 
+            2e 2e 20 74 
+            6f 67 67 6c 
+            65 20 6f 75 
+            74 70 75 74 
+            20 70 6f 72 
+            74 0d 0a               db       'o           .. toggle output port',0dh,0ah
+  690 0343: 67 20 61 64 
+            64 72 20 20 
+            20 20 20 20 
+            2e 2e 20 6a 
+            75 6d 70 20 
+            74 6f 20 61 
+            64 64 72 65 
+            73 73 0d 0a            db       'g addr      .. jump to address',0dh,0ah
+  691 0363: 0d 0a 00               db       0dh,0ah,0
+  692 0366:             
+  693 0366: 1b 5b 32 4a clearscr:  db       1bh,5bh,32h,4ah
+  694 036a: 1b 5b 31 3b 
+            31 48 00               db       1bh,5bh,31h,3bh,31h,48h,0
+  695 0371:             
+  696 0371: 0d 0a 3e 00 prompt:    db       0dh,0ah,'>',0
+  697 0375:             
+  698 0375: 0d 0a 00    crlf:      db       0dh,0ah,0
+  699 0378:             
+  700 0378:             
+  701 0378: 0d 0a       isnummsg:  db       0dh,0ah
+  702 037a: 67 6f 74 20 
+            64 69 67 69 
+            74                     db       'got digit'
+  703 0383: 0d 0a 00               db       0dh,0ah,0
+  704 0386:             
+  705 0386: 0d 0a       ishexmsg:  db       0dh,0ah
+  706 0388: 67 6f 74 20 
+            68 65 78               db       'got hex'
+  707 038f: 0d 0a 00               db       0dh,0ah,0
+  708 0392:             
+  709 0392: 0d 0a       invalmsg:  db       0dh,0ah
+  710 0394: 69 6e 76 61 
+            6c 69 64 20 
+            21 21                  db       'invalid !!'
+  711 039e: 0d 0a 00               db       0dh,0ah,0
+  712 03a1:             
+  713 03a1:             tempbuf:   ds       8
+  714 03a9:             
+  715 03a9:             endrom:    equ      $
+  716 03a9:             
+
+0000h: R0               -     14
+0001h: R1               -     15
+0002h: R2               -     16
+0003h: R3               -     17
+0004h: R4               -     18
+0005h: R5               -     19
+0006h: R6               -     20
+0007h: R7               -     21
+0008h: R8               -     22
+0009h: R9               -     23
+000ah: R10              -     24
+000bh: R11              -     25
+000ch: R12              -     26
+000dh: R13              -     27
+000eh: R14              -     28
+000fh: R15              -     29
+0000h: PC               -     31
+0001h: RX               -     32
+0002h: SP               -     33
+0003h: CALLPTR          -     34
+0004h: CALLPC           -     35
+0007h: TXSTAT           -     36
+0007h: RXSTAT           -     37
+0008h: TXDATA           -     38
+0008h: RXDATA           -     39
+0009h: TMSTAT           -     40
+0009h: TMCNTL           -     41
+000ah: PORTA            -     42
+000bh: T1               -     44
+000ch: T2               -     45
+000dh: T3               -     46
+000eh: T4               -     47
+000fh: T5               -     48
+f000h: UARTCNTL         -     52
+f001h: UARTBSR0         -     53
+f002h: UARTBSR1         -     54
+f003h: UARTSTAT         -     55
+f004h: UARTMASK         -     56
+f005h: UARTDATA         -     57
+00e3h: BAUD0            -     65
+0078h: BAUD1            -     66
+0040h: FRAMINGERROR     -     71
+0020h: PARITYERROR      -     72
+0010h: OVERRUNERR       -     73
+0008h: TXFIFOEMPTY      -     74
+0004h: TXNOTFULL        -     75
+0002h: RXFIFOFULL       -     76
+0001h: RXNOTEMPTY       -     77
+0003h: TXRX             -     78
+f008h: TIMRCNTL         -     82
+f008h: TIMRSTAT         -     83
+f009h: TIMRICL          -     84
+f00ah: TIMRICH          -     85
+0088h: TIME0            -     93
+0013h: TIME1            -     94
+0001h: TMSTART          -     95
+0000h: TMSTOP           -     96
+f00ch: OPORTA           -    101
+0fffh: STACK            -    105
+0003h: XINVAL           -    122
+000ch: XISHEX           -    131
+0015h: XISNUM           -    140
+001eh: XHELLO           -    149
+0027h: XHELP            -    158
+0030h: XPROMPT          -    167
+0039h: XCRLF            -    176
+0042h: XCLEAR           -    185
+004bh: PUTST            -    194
+004fh: PUTS1            -    196
+005dh: GETC             -    208
+0068h: GETCH            -    219
+0070h: PUTC             -    229
+007bh: TOUPPER          -    240
+008dh: ISALPHA          -    256
+00a6h: ISNUM            -    274
+00b4h: ISALNUM          -    287
+00d8h: ISHEX            -    310
+00fch: ISHEX2           -    333
+010ah: LTRIM            -    345
+0117h: STRCMP           -    359
+012ah: STRCMP1          -    369
+012fh: STRCMPE          -    371
+0138h: STRCMPM          -    375
+013dh: STRCPY           -    382
+0146h: MEMCPY           -    392
+014eh: MEMCPY1          -    396
+0155h: GETINP           -    406
+0161h: GETINP1          -    416
+0177h: GETINP2          -    428
+017dh: GETINP3          -    431
+0180h: GETINP4          -    433
+018fh: GETINP5          -    444
+01b7h: GOTO1            -    475
+01c3h: GOTO2            -    486
+01c5h: GETINP8          -    489
+01c8h: GETINPX          -    490
+01ceh: WAIT             -    498
+01d1h: WAITLOOP         -    500
+01ddh: INIT             -    511
+022fh: HELLO            -    578
+0232h: MAIN             -    593
+025dh: CMD_HELP         -    628
+0263h: CMD_CLEAR        -    632
+0269h: CMD_OUT          -    636
+0270h: CMD_GOTO         -    641
+0277h: PASSES           -    650
+027dh: FAILS            -    654
+0280h: RETURN           -    657
+0288h: CALLSUB          -    664
+028eh: HELLOMSG         -    679
+02aah: HELPMSG          -    684
+0366h: CLEARSCR         -    693
+0371h: PROMPT           -    696
+0375h: CRLF             -    698
+0378h: ISNUMMSG         -    701
+0386h: ISHEXMSG         -    705
+0392h: INVALMSG         -    709
+03a1h: TEMPBUF          -    713
+03a9h: ENDROM           -    715
+0000h: R0               - <    14> 
+0001h: R1               - <    15> 
+0002h: R2               - <    16> 
+0003h: R3               - <    17> 
+0004h: R4               - <    18> 
+0005h: R5               - <    19> 
+0006h: R6               - <    20> 
+0007h: R7               - <    21> 
+0008h: R8               - <    22> 
+0009h: R9               - <    23> 
+000ah: R10              - <    24> 
+000bh: R11              - <    25> 
+000ch: R12              - <    26> 
+000dh: R13              - <    27> 
+000eh: R14              - <    28> 
+000fh: R15              - <    29> 
+0000h: PC               - <    31>    662    664    666 
+0001h: RX               - <    32>    516 
+0002h: SP               - <    33>    512    514 
+0003h: CALLPTR          - <    34>    408    416    419    422    424    490 
+          519    521    578    596    599    602    628    632    658    660 
+0004h: CALLPC           - <    35>    665    667    669    669 
+0007h: TXSTAT           - <    36>    196    229    529    531 
+0007h: RXSTAT           - <    37>    208    219 
+0008h: TXDATA           - <    38>    200    233    524    526 
+0008h: RXDATA           - <    39>    211    222 
+0009h: TMSTAT           - <    40>    500    539    541 
+0009h: TMCNTL           - <    41>    499    504 
+000ah: PORTA            - <    42>    534    536    636    638 
+000bh: T1               - <    44>    212    223    232    240    245    247 
+          256    261    274    287    292    297    310    315    320    333 
+          407    418    428    431    441    463    465    469    479    482 
+          544    546    548    551    553    555    558    560    562    565 
+          567    569    572    574    576    608    612    616    620    624 
+          661    668 
+000ch: T2               - <    45>    392    394    399    435    437    443 
+          459    476    478    480    481    483    642 
+000dh: T3               - <    46>    359    383    385    397    398    442 
+          454    456    643 
+000eh: T4               - <    47>    123    125    132    134    141    143 
+          150    152    159    161    168    170    177    179    186    188 
+          194    199    345    349    363    371    382    396    412    414 
+          433    434    439    444    445    446    451    453    457    461 
+          462    466    467    468 
+000fh: T5               - <    48>    470    604 
+f000h: UARTCNTL         - <    52>    571    573 
+f001h: UARTBSR0         - <    53>    557    559 
+f002h: UARTBSR1         - <    54>    564    566 
+f003h: UARTSTAT         - <    55>    528    530 
+f004h: UARTMASK         - <    56> 
+f005h: UARTDATA         - <    57>    523    525 
+00e3h: BAUD0            - <    65>    561 
+0078h: BAUD1            - <    66>    568 
+0040h: FRAMINGERROR     - <    71> 
+0020h: PARITYERROR      - <    72> 
+0010h: OVERRUNERR       - <    73> 
+0008h: TXFIFOEMPTY      - <    74> 
+0004h: TXNOTFULL        - <    75>    197    230 
+0002h: RXFIFOFULL       - <    76> 
+0001h: RXNOTEMPTY       - <    77>    209    220 
+0003h: TXRX             - <    78>    575 
+f008h: TIMRCNTL         - <    82> 
+f008h: TIMRSTAT         - <    83>    538    540 
+f009h: TIMRICL          - <    84>    543    545 
+f00ah: TIMRICH          - <    85>    550    552 
+0088h: TIME0            - <    93>    547 
+0013h: TIME1            - <    94>    554 
+0001h: TMSTART          - <    95>    498 
+0000h: TMSTOP           - <    96>    503 
+f00ch: OPORTA           - <   101>    533    535 
+0fffh: STACK            - <   105>    511    513 
+0003h: XINVAL           - <   122>    491 
+000ch: XISHEX           - <   131> 
+0015h: XISNUM           - <   140> 
+001eh: XHELLO           - <   149>    579 
+0027h: XHELP            - <   158>    629 
+0030h: XPROMPT          - <   167>    597 
+0039h: XCRLF            - <   176> 
+0042h: XCLEAR           - <   185>    633 
+004bh: PUTST            - <   194>    126    135    144    153    162    171 
+          180    189    201 
+004fh: PUTS1            - <   196>    198 
+005dh: GETC             - <   208>    210 
+0068h: GETCH            - <   219>    221    417    600 
+0070h: PUTC             - <   229>    231    409 
+007bh: TOUPPER          - <   240>    423    603 
+008dh: ISALPHA          - <   256> 
+00a6h: ISNUM            - <   274>    420 
+00b4h: ISALNUM          - <   287> 
+00d8h: ISHEX            - <   310> 
+00fch: ISHEX2           - <   333>    425 
+010ah: LTRIM            - <   345>    350 
+0117h: STRCMP           - <   359>    365 
+012ah: STRCMP1          - <   369>    366 
+012fh: STRCMPE          - <   371>    360 
+0138h: STRCMPM          - <   375>    372 
+013dh: STRCPY           - <   382>    386 
+0146h: MEMCPY           - <   392>    400 
+014eh: MEMCPY1          - <   396>    393 
+0155h: GETINP           - <   406>    644 
+0161h: GETINP1          - <   416>    438 
+0177h: GETINP2          - <   428>    421 
+017dh: GETINP3          - <   431>    426 
+0180h: GETINP4          - <   433>    430 
+018fh: GETINP5          - <   444>    458    458 
+01b7h: GOTO1            - <   475>    472 
+01c3h: GOTO2            - <   486>    475    477 
+01c5h: GETINP8          - <   489>    464 
+01c8h: GETINPX          - <   490>    427 
+01ceh: WAIT             - <   498> 
+01d1h: WAITLOOP         - <   500>    502 
+01ddh: INIT             - <   511>    113    615 
+022fh: HELLO            - <   578> 
+0232h: MAIN             - <   593>    473    489    626    630    634    639 
+025dh: CMD_HELP         - <   628>    607 
+0263h: CMD_CLEAR        - <   632>    611 
+0269h: CMD_OUT          - <   636>    619 
+0270h: CMD_GOTO         - <   641>    623 
+0277h: PASSES           - <   650>    260    266    279    296    302    314 
+          319    324    337 
+027dh: FAILS            - <   654>    258    263    265    276    278    289 
+          291    294    299    301    312    317    322    325    335    338 
+0280h: RETURN           - <   657>    195    202    213    234    242    244 
+          248    346    348    368    370    374    376    384    395    492 
+          505    652 
+0288h: CALLSUB          - <   664>    518    520    657    659 
+028eh: HELLOMSG         - <   679>    149    151 
+02aah: HELPMSG          - <   684>    158    160 
+0366h: CLEARSCR         - <   693>    185    187 
+0371h: PROMPT           - <   696>    167    169 
+0375h: CRLF             - <   698>    176    178 
+0378h: ISNUMMSG         - <   701>    140    142 
+0386h: ISHEXMSG         - <   705>    131    133 
+0392h: INVALMSG         - <   709>    122    124 
+03a1h: TEMPBUF          - <   713>    411    413 
+03a9h: ENDROM           - <   715> 
+
+716 Lines assembled
+0 Errors
+119 Labels
+Object Code:929 bytes
+
